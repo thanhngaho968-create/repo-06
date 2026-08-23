@@ -1,0 +1,53 @@
+name: Text Processing Engine (FR)
+
+on:
+  repository_dispatch:
+    types: [novel_event]
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      novel_id:
+        description: 'Generic Task ID'
+        required: true
+        default: 'novel_fr_001'
+      payload:
+        description: 'Encoded novel metadata'
+        required: false
+
+jobs:
+  build-and-sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout Codebase
+        uses: actions/checkout@v4
+
+      - name: Setup Python Environment
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Pandoc & Ebook Tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq pandoc calibre
+
+      - name: Install Python Dependencies
+        run: |
+          pip install requests beautifulsoup4 ebooklib reportlab google-api-python-client google-auth gspread
+
+      - name: Execute Novel Scraper & Multi-Format Builder
+        env:
+          GDRIVE_SA_BASE64: ${{ secrets.GDRIVE_SA_BASE64 }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+          CF_RELAY_URL: ${{ secrets.CF_RELAY_URL }}
+          CF_RELAY_SECRET: ${{ secrets.CF_RELAY_SECRET }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          GSHEET_QUEUE_ID: ${{ secrets.GSHEET_QUEUE_ID }}
+          TASK_ID: ${{ github.event.client_payload.novel_id || inputs.novel_id }}
+          TASK_PAYLOAD: ${{ github.event.client_payload.payload || inputs.payload }}
+        run: |
+          python3 novel_processor.py
